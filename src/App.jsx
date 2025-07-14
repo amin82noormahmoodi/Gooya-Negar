@@ -88,263 +88,199 @@ function App() {
   const textareaRef = useRef(null)
 
   const recognitionRef = useRef(null)
+  const lastProcessedIndex = useRef(0)
 
-  // Check browser support for Web Speech API
+  // Initialize speech recognition
   useEffect(() => {
-    const checkSupport = () => {
-      // Check if we have speech recognition support
-      const hasWebkitSpeechRecognition = 'webkitSpeechRecognition' in window
-      const hasSpeechRecognition = 'SpeechRecognition' in window
+    // Check if browser supports speech recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition()
       
-      if (!hasWebkitSpeechRecognition && !hasSpeechRecognition) {
-        setIsSupported(false)
-        setError('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند')
-        return
+      // Configure recognition
+      recognitionRef.current.continuous = true
+      recognitionRef.current.interimResults = true
+      recognitionRef.current.lang = 'fa-IR' // Persian language
+      
+      // Set up event handlers
+      recognitionRef.current.onstart = () => {
+        setIsRecording(true)
+        setError('')
+        lastProcessedIndex.current = 0
       }
 
-      // Check HTTPS requirement for Safari iOS
-      if (isSafariIOS() && !isHTTPS()) {
-        setIsSupported(false)
-        setError('برای استفاده از تشخیص گفتار در Safari، نیاز به HTTPS دارید')
-        return
+      recognitionRef.current.onresult = (event) => {
+        let newFinalTranscript = ''
+
+        // Only process new results we haven't seen before
+        for (let i = lastProcessedIndex.current; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            newFinalTranscript += result[0].transcript
+            lastProcessedIndex.current = i + 1
+          }
+        }
+
+        // Only update if we have new final transcript
+        if (newFinalTranscript.trim()) {
+          setEditableText(prevText => {
+            const currentText = prevText || ''
+            const newText = currentText + (currentText ? ' ' : '') + newFinalTranscript.trim()
+            setTranscript(newText)
+            
+            // Update cursor position to end of text
+            if (!cursorManuallyMoved) {
+              setTimeout(() => {
+                if (textareaRef.current) {
+                  textareaRef.current.setSelectionRange(newText.length, newText.length)
+                  setCursorPosition(newText.length)
+                }
+              }, 0)
+            }
+            
+            return newText
+          })
+        }
       }
 
-      // Set browser info for debugging
-      const userAgent = navigator.userAgent
-      const isSafari = isSafariIOS()
-      setBrowserInfo(isSafari ? 'Safari iOS' : 'Other')
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+        
+        switch (event.error) {
+          case 'network':
+            setError('خطای شبکه. لطفاً اتصال اینترنت خود را بررسی کنید.')
+            break
+          case 'not-allowed':
+            setError('دسترسی به میکروفون مجاز نیست. لطفاً اجازه دسترسی را بدهید.')
+            break
+          case 'no-speech':
+            setError('صدایی تشخیص داده نشد. لطفاً دوباره تلاش کنید.')
+            break
+          case 'audio-capture':
+            setError('خطا در ضبط صدا. لطفاً میکروفون خود را بررسی کنید.')
+            break
+          default:
+            setError(`خطا در تشخیص گفتار: ${event.error}`)
+        }
+      }
+
+      recognitionRef.current.onend = () => {
+        setIsRecording(false)
+        lastProcessedIndex.current = 0
+      }
 
       setIsSupported(true)
-      initializeSpeechRecognition()
+      
+      // Set browser info for debugging
+      const userAgent = navigator.userAgent
+      if (userAgent.includes('Chrome')) {
+        setBrowserInfo('Chrome')
+      } else if (userAgent.includes('Firefox')) {
+        setBrowserInfo('Firefox')
+      } else if (userAgent.includes('Safari')) {
+        setBrowserInfo('Safari')
+      } else if (userAgent.includes('Edge')) {
+        setBrowserInfo('Edge')
+      } else {
+        setBrowserInfo('Unknown')
+      }
+      
+    } else {
+      setIsSupported(false)
+      setError('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند. لطفاً از Chrome استفاده کنید.')
     }
 
-    checkSupport()
+    // Cleanup
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+      }
+    }
   }, [])
 
-  // Save cursor position when textarea changes
-  const handleTextareaChange = (e) => {
-    setEditableText(e.target.value)
-    setCursorPosition(e.target.selectionStart)
-    setCursorManuallyMoved(true)
-  }
+  // Toggle recording function
+  const toggleRecording = () => {
+    if (!recognitionRef.current) return
 
-  // Update cursor position when textarea is clicked or cursor moves
-  const handleTextareaSelect = (e) => {
-    const newPosition = e.target.selectionStart
-    if (newPosition !== cursorPosition) {
-      setCursorPosition(newPosition)
-      setCursorManuallyMoved(true)
-    }
-  }
-
-  const initializeSpeechRecognition = () => {
-    // Use webkitSpeechRecognition for Safari compatibility
-    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition
-    
-    if (!SpeechRecognition) {
-      setError('تشخیص گفتار در دسترس نیست')
-      return
-    }
-
-    const recognition = new SpeechRecognition()
-    const isSafari = isSafariIOS()
-
-    // Configuration - adjusted for Safari iOS
-    recognition.continuous = !isSafari // Safari iOS has issues with continuous mode
-    recognition.interimResults = !isSafari // Safari iOS has issues with interim results
-    recognition.lang = 'fa-IR' // Persian language
-    recognition.maxAlternatives = 1
-
-    // Event handlers
-    recognition.onstart = () => {
-      setIsRecording(true)
-      setError('')
-      console.log('شروع تشخیص گفتار')
-      
-      // If cursor wasn't manually moved, set it to the end
-      if (!cursorManuallyMoved && textareaRef.current) {
-        const endPosition = textareaRef.current.value.length
-        textareaRef.current.selectionStart = endPosition
-        textareaRef.current.selectionEnd = endPosition
-        setCursorPosition(endPosition)
-      }
-    }
-
-    recognition.onresult = (event) => {
-      let interimTranscript = ''
-      let finalTranscriptTemp = ''
-      // console.log(event.results)
-      
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript
-        // console.log(event)
-        if (event.results[i].isFinal) {
-          finalTranscriptTemp += transcript
-        } else {
-          interimTranscript += transcript
-        }
-      }
-
-      // For Safari iOS, treat all results as final
-      if (isSafari) {
-        finalTranscriptTemp = interimTranscript + finalTranscriptTemp
-        interimTranscript = ''
-      }
-
-      setTranscript(interimTranscript)
-      
-      if (finalTranscriptTemp) {
-        setEditableText(prevText => {
-          // Get current cursor position from textarea
-          const currentPosition = cursorManuallyMoved ? cursorPosition : prevText.length
-          console.log("#### GIIIIIIIIIIII ####")
-          console.log(prevText)
-          console.log(currentPosition)
-          console.log(finalTranscriptTemp)
-
-          // Insert new text at cursor position
-          const beforeCursor = prevText.slice(0, currentPosition)
-          const afterCursor = prevText.slice(currentPosition)
-          const newText = beforeCursor + finalTranscriptTemp + ' ' + afterCursor
-          
-          // Update cursor position
-          const newCursorPosition = currentPosition + finalTranscriptTemp.length + 1
-          
-          // Schedule cursor position update
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.selectionStart = newCursorPosition
-              textareaRef.current.selectionEnd = newCursorPosition
-              setCursorPosition(newCursorPosition)
-            }
-          }, 0)
-          
-          return newText
-        })
-
-        // For Safari iOS, restart recognition after getting a result
-        if (isSafari && isRecording) {
-          setTimeout(() => {
-            if (recognitionRef.current && isRecording) {
-              try {
-                recognitionRef.current.start()
-              } catch (err) {
-                console.log('Recognition restart failed:', err)
-              }
-            }
-          }, 100)
-        }
-      }
-    }
-
-    recognition.onerror = (event) => {
-      console.error('خطا در تشخیص گفتار:', event.error)
-      setIsRecording(false)
-      
-      switch (event.error) {
-        case 'no-speech':
-          setError('صدایی شنیده نشد. لطفاً دوباره تلاش کنید.')
-          break
-        case 'audio-capture':
-          setError('خطا در دسترسی به میکروفون')
-          break
-        case 'not-allowed':
-          setError('دسترسی به میکروفون رد شد. لطفاً دسترسی را مجاز کنید.')
-          break
-        case 'network':
-          setError('خطا در اتصال به اینترنت')
-          break
-        case 'service-not-allowed':
-          if (isSafariIOS() && !isHTTPS()) {
-            setError('برای استفاده از تشخیص گفتار در Safari، نیاز به HTTPS دارید')
-          } else {
-            setError('سرویس تشخیص گفتار در دسترس نیست. لطفاً دسترسی میکروفون را بررسی کنید.')
-          }
-          break
-        case 'aborted':
-          // Don't show error for aborted recognition
-          break
-        default:
-          setError(`خطا: ${event.error}`)
-      }
-    }
-
-    recognition.onend = () => {
-      setIsRecording(false)
-      setTranscript('')
-      console.log('پایان تشخیص گفتار')
-    }
-
-    recognitionRef.current = recognition
-  }
-
-  const startRecording = () => {
-    if (!isSupported) {
-      setError('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند')
-      return
-    }
-
-    // Check HTTPS requirement again
-    if (isSafariIOS() && !isHTTPS()) {
-      setError('برای استفاده از تشخیص گفتار در Safari، نیاز به HTTPS دارید')
-      return
-    }
-
-    if (recognitionRef.current) {
+    if (isRecording) {
+      recognitionRef.current.stop()
+    } else {
       try {
         recognitionRef.current.start()
-        setError('')
-      } catch (err) {
-        console.error('خطا در شروع ضبط:', err)
-        if (err.name === 'InvalidStateError') {
-          // Recognition is already running, stop it first
-          recognitionRef.current.stop()
-          setTimeout(() => {
-            try {
-              recognitionRef.current.start()
-            } catch (retryErr) {
-              setError('خطا در شروع ضبط')
-            }
-          }, 100)
-        } else {
-          setError('خطا در شروع ضبط')
-        }
+      } catch (error) {
+        console.error('Error starting recognition:', error)
+        setError('خطا در شروع ضبط. لطفاً دوباره تلاش کنید.')
       }
     }
   }
 
-  const stopRecording = () => {
-    if (recognitionRef.current && isRecording) {
-      recognitionRef.current.stop()
-    }
-  }
-
+  // Clear transcript function
   const clearTranscript = () => {
     setTranscript('')
     setEditableText('')
     setCursorPosition(0)
     setCursorManuallyMoved(false)
-  }
-
-  const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording()
-    } else {
-      startRecording()
+    setError('')
+    
+    if (textareaRef.current) {
+      textareaRef.current.focus()
     }
   }
 
-  // Add copy function
+  // Copy text function
   const handleCopy = async () => {
-    const textToCopy = editableText || transcript;
+    const textToCopy = editableText || transcript
+    
+    if (!textToCopy) return
+
     try {
-      await navigator.clipboard.writeText(textToCopy);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000); // Reset after 2 seconds
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
+      await navigator.clipboard.writeText(textToCopy)
+      setCopySuccess(true)
+      
+      // Reset success state after 2 seconds
+      setTimeout(() => {
+        setCopySuccess(false)
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to copy text:', error)
+      
+      // Fallback for older browsers
+      try {
+        if (textareaRef.current) {
+          textareaRef.current.select()
+          document.execCommand('copy')
+          setCopySuccess(true)
+          
+          setTimeout(() => {
+            setCopySuccess(false)
+          }, 2000)
+        }
+      } catch (fallbackError) {
+        console.error('Fallback copy failed:', fallbackError)
+        setError('خطا در کپی کردن متن')
+      }
     }
-  };
+  }
+
+  // Handle textarea changes
+  const handleTextareaChange = (e) => {
+    setEditableText(e.target.value)
+    setTranscript(e.target.value)
+    setCursorPosition(e.target.selectionStart)
+  }
+
+  // Handle textarea selection/cursor position
+  const handleTextareaSelect = (e) => {
+    setCursorPosition(e.target.selectionStart)
+    setCursorManuallyMoved(true)
+    
+    // Reset manual move flag after 3 seconds of inactivity
+    setTimeout(() => {
+      setCursorManuallyMoved(false)
+    }, 3000)
+  }
 
   return (
     <div className="app">
