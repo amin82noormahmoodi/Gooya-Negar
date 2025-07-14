@@ -1,6 +1,64 @@
 import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
+// Audio Player Component
+const AudioPlayer = ({ 
+  audioRef, 
+  isPlaying, 
+  onTogglePlay, 
+  duration, 
+  currentTime, 
+  fileSize 
+}) => {
+  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0
+  
+  const formatTime = (time) => {
+    if (isNaN(time)) return "00:00"
+    const minutes = Math.floor(time / 60)
+    const seconds = Math.floor(time % 60)
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  }
+
+  return (
+    <div className="audio-player">
+      <button 
+        className="audio-play-button"
+        onClick={onTogglePlay}
+      >
+        {isPlaying ? (
+          <PauseIcon className="play-icon" />
+        ) : (
+          <PlayIcon className="play-icon" />
+        )}
+      </button>
+      
+      <div className="audio-waveform">
+        {/* موج‌های صوتی */}
+        {Array.from({ length: 50 }, (_, i) => (
+          <div 
+            key={i}
+            className={`wave-bar-static ${i < (progressPercentage / 2) ? 'active' : ''}`}
+            style={{ 
+              height: `${Math.random() * 60 + 20}%`,
+              animationDelay: `${i * 50}ms`
+            }}
+          />
+        ))}
+      </div>
+      
+
+    </div>
+  )
+}
+
 // Professional SVG Icons
 const MicrophoneIcon = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -17,6 +75,19 @@ const StopIcon = ({ className }) => (
   </svg>
 )
 
+const PlayIcon = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <polygon points="5,3 19,12 5,21"/>
+  </svg>
+)
+
+const PauseIcon = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <rect x="6" y="4" width="4" height="16"/>
+    <rect x="14" y="4" width="4" height="16"/>
+  </svg>
+)
+
 const TrashIcon = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M3 6h18"/>
@@ -24,6 +95,13 @@ const TrashIcon = ({ className }) => (
     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
     <line x1="10" y1="11" x2="10" y2="17"/>
     <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+)
+
+const SendIcon = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22,2 15,22 11,13 2,9 22,2"/>
   </svg>
 )
 
@@ -40,23 +118,6 @@ const XIcon = ({ className }) => (
   </svg>
 )
 
-const WaveIcon = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 2v20"/>
-    <path d="M8 5v14"/>
-    <path d="M16 5v14"/>
-    <path d="M4 8v8"/>
-    <path d="M20 8v8"/>
-  </svg>
-)
-
-const EditIcon = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-  </svg>
-)
-
 const CopyIcon = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -64,222 +125,264 @@ const CopyIcon = ({ className }) => (
   </svg>
 )
 
-// Helper function to detect Safari iOS
-const isSafariIOS = () => {
-  const userAgent = navigator.userAgent.toLowerCase()
-  return /iphone|ipad|ipod/.test(userAgent) && /safari/.test(userAgent) && !/chrome|crios|fxios/.test(userAgent)
-}
-
-// Helper function to check if HTTPS is being used
-const isHTTPS = () => {
-  return window.location.protocol === 'https:' || window.location.hostname === 'localhost'
-}
+const LoadingIcon = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 2a10 10 0 0 1 10 10"/>
+  </svg>
+)
 
 function App() {
+  // State management
   const [isRecording, setIsRecording] = useState(false)
+  const [hasRecording, setHasRecording] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [transcript, setTranscript] = useState('')
-  const [editableText, setEditableText] = useState('')
-  const [isSupported, setIsSupported] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [copySuccess, setCopySuccess] = useState(false)
-  const [cursorPosition, setCursorPosition] = useState(0)
-  const [cursorManuallyMoved, setCursorManuallyMoved] = useState(false)
-  const [browserInfo, setBrowserInfo] = useState('')
+  const [audioDuration, setAudioDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [audioFileSize, setAudioFileSize] = useState(0)
+  
+  // Refs
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const audioRef = useRef(null)
   const textareaRef = useRef(null)
 
-  const recognitionRef = useRef(null)
-  const lastProcessedIndex = useRef(0)
+  // API configuration
+  const API_BASE_URL = 'http://localhost:8000'
 
-  // Initialize speech recognition
-  useEffect(() => {
-    // Check if browser supports speech recognition
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition()
+  // Initialize audio recording
+  const initializeRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      })
       
-      // Configure recognition
-      recognitionRef.current.continuous = true
-      recognitionRef.current.interimResults = true
-      recognitionRef.current.lang = 'fa-IR' // Persian language
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      })
       
-      // Set up event handlers
-      recognitionRef.current.onstart = () => {
-        setIsRecording(true)
-        setError('')
-        lastProcessedIndex.current = 0
-      }
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
 
-      recognitionRef.current.onresult = (event) => {
-        let newFinalTranscript = ''
-
-        // Only process new results we haven't seen before
-        for (let i = lastProcessedIndex.current; i < event.results.length; i++) {
-          const result = event.results[i]
-          if (result.isFinal) {
-            newFinalTranscript += result[0].transcript
-            lastProcessedIndex.current = i + 1
-          }
-        }
-
-        // Only update if we have new final transcript
-        if (newFinalTranscript.trim()) {
-          setEditableText(prevText => {
-            const currentText = prevText || ''
-            const newText = currentText + (currentText ? ' ' : '') + newFinalTranscript.trim()
-            setTranscript(newText)
-            
-            // Update cursor position to end of text
-            if (!cursorManuallyMoved) {
-              setTimeout(() => {
-                if (textareaRef.current) {
-                  textareaRef.current.setSelectionRange(newText.length, newText.length)
-                  setCursorPosition(newText.length)
-                }
-              }, 0)
-            }
-            
-            return newText
-          })
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
         }
       }
 
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error)
-        setIsRecording(false)
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const audioUrl = URL.createObjectURL(audioBlob)
         
-        switch (event.error) {
-          case 'network':
-            setError('خطای شبکه. لطفاً اتصال اینترنت خود را بررسی کنید.')
-            break
-          case 'not-allowed':
-            setError('دسترسی به میکروفون مجاز نیست. لطفاً اجازه دسترسی را بدهید.')
-            break
-          case 'no-speech':
-            setError('صدایی تشخیص داده نشد. لطفاً دوباره تلاش کنید.')
-            break
-          case 'audio-capture':
-            setError('خطا در ضبط صدا. لطفاً میکروفون خود را بررسی کنید.')
-            break
-          default:
-            setError(`خطا در تشخیص گفتار: ${event.error}`)
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl
         }
+        
+        setHasRecording(true)
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop())
       }
 
-      recognitionRef.current.onend = () => {
-        setIsRecording(false)
-        lastProcessedIndex.current = 0
-      }
-
-      setIsSupported(true)
-      
-      // Set browser info for debugging
-      const userAgent = navigator.userAgent
-      if (userAgent.includes('Chrome')) {
-        setBrowserInfo('Chrome')
-      } else if (userAgent.includes('Firefox')) {
-        setBrowserInfo('Firefox')
-      } else if (userAgent.includes('Safari')) {
-        setBrowserInfo('Safari')
-      } else if (userAgent.includes('Edge')) {
-        setBrowserInfo('Edge')
-      } else {
-        setBrowserInfo('Unknown')
-      }
-      
-    } else {
-      setIsSupported(false)
-      setError('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند. لطفاً از Chrome استفاده کنید.')
+      setError('')
+      return true
+    } catch (err) {
+      console.error('Error accessing microphone:', err)
+      setError('دسترسی به میکروفون امکان‌پذیر نیست. لطفاً اجازه دسترسی دهید.')
+      return false
     }
+  }
 
-    // Cleanup
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
+  // Start recording
+  const startRecording = async () => {
+    const initialized = await initializeRecording()
+    if (!initialized) return
+
+    try {
+      mediaRecorderRef.current.start(1000) // Collect data every second
+      setIsRecording(true)
+      setHasRecording(false)
+      setError('')
+    } catch (err) {
+      console.error('Error starting recording:', err)
+      setError('خطا در شروع ضبط صدا')
+    }
+  }
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      
+      // محاسبه اندازه فایل
+      setTimeout(() => {
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+          setAudioFileSize(audioBlob.size)
+        }
+      }, 100)
+    }
+  }
+
+  // Toggle recording
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
+  // Play/pause audio
+  const togglePlayback = () => {
+    if (!audioRef.current || !hasRecording) return
+
+    if (isPlaying) {
+      audioRef.current.pause()
+      setIsPlaying(false)
+    } else {
+      audioRef.current.play()
+      setIsPlaying(true)
+    }
+  }
+
+  // Audio event handlers
+  useEffect(() => {
+    if (audioRef.current) {
+      const audio = audioRef.current
+
+      const handleEnded = () => setIsPlaying(false)
+      const handlePause = () => setIsPlaying(false)
+      const handleLoadedMetadata = () => {
+        setAudioDuration(audio.duration)
+      }
+      const handleTimeUpdate = () => {
+        setCurrentTime(audio.currentTime)
+      }
+
+      audio.addEventListener('ended', handleEnded)
+      audio.addEventListener('pause', handlePause)
+      audio.addEventListener('loadedmetadata', handleLoadedMetadata)
+      audio.addEventListener('timeupdate', handleTimeUpdate)
+
+      return () => {
+        audio.removeEventListener('ended', handleEnded)
+        audio.removeEventListener('pause', handlePause)
+        audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
+        audio.removeEventListener('timeupdate', handleTimeUpdate)
       }
     }
   }, [])
 
-  // Toggle recording function
-  const toggleRecording = () => {
-    if (!recognitionRef.current) return
+  // Send audio to backend
+  const sendAudio = async () => {
+    if (!hasRecording || audioChunksRef.current.length === 0) return
 
-    if (isRecording) {
-      recognitionRef.current.stop()
-    } else {
-      try {
-        recognitionRef.current.start()
-      } catch (error) {
-        console.error('Error starting recognition:', error)
-        setError('خطا در شروع ضبط. لطفاً دوباره تلاش کنید.')
-      }
-    }
-  }
-
-  // Clear transcript function
-  const clearTranscript = () => {
-    setTranscript('')
-    setEditableText('')
-    setCursorPosition(0)
-    setCursorManuallyMoved(false)
+    setIsLoading(true)
     setError('')
-    
-    if (textareaRef.current) {
-      textareaRef.current.focus()
-    }
-  }
-
-  // Copy text function
-  const handleCopy = async () => {
-    const textToCopy = editableText || transcript
-    
-    if (!textToCopy) return
 
     try {
-      await navigator.clipboard.writeText(textToCopy)
-      setCopySuccess(true)
-      
-      // Reset success state after 2 seconds
-      setTimeout(() => {
-        setCopySuccess(false)
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy text:', error)
-      
-      // Fallback for older browsers
-      try {
-        if (textareaRef.current) {
-          textareaRef.current.select()
-          document.execCommand('copy')
-          setCopySuccess(true)
-          
-          setTimeout(() => {
-            setCopySuccess(false)
-          }, 2000)
-        }
-      } catch (fallbackError) {
-        console.error('Fallback copy failed:', fallbackError)
-        setError('خطا در کپی کردن متن')
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+      const formData = new FormData()
+      formData.append('file', audioBlob, 'recording.webm')
+      formData.append('language', 'fa-IR')
+
+      const response = await fetch(`${API_BASE_URL}/transcribe`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`)
       }
+
+      const result = await response.json()
+      
+      if (result.success && result.text) {
+        // Append new text to existing transcript
+        const newText = result.text.trim()
+        if (newText) {
+          setTranscript(prev => {
+            const updated = prev ? `${prev} ${newText}` : newText
+            return updated
+          })
+        }
+      } else if (result.success === false) {
+        // Handle backend error response
+        setError(result.error || result.message || 'خطا در تبدیل صوت به متن')
+      } else {
+        setError('متن قابل تشخیصی در فایل صوتی یافت نشد')
+      }
+
+      // Clear recording after successful transcription
+      clearRecording()
+
+    } catch (err) {
+      console.error('Error sending audio:', err)
+      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        setError('خطا در اتصال به سرور. لطفاً اطمینان حاصل کنید که سرور در حال اجرا است.')
+      } else {
+        setError('خطا در ارسال فایل صوتی: ' + err.message)
+      }
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Handle textarea changes
-  const handleTextareaChange = (e) => {
-    setEditableText(e.target.value)
-    setTranscript(e.target.value)
-    setCursorPosition(e.target.selectionStart)
+  // Clear current recording (not transcript)
+  const clearRecording = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+    }
+    
+    audioChunksRef.current = []
+    setHasRecording(false)
+    setIsPlaying(false)
+    setAudioDuration(0)
+    setCurrentTime(0)
+    setAudioFileSize(0)
+    setError('')
   }
 
-  // Handle textarea selection/cursor position
-  const handleTextareaSelect = (e) => {
-    setCursorPosition(e.target.selectionStart)
-    setCursorManuallyMoved(true)
-    
-    // Reset manual move flag after 3 seconds of inactivity
-    setTimeout(() => {
-      setCursorManuallyMoved(false)
-    }, 3000)
+  // Clear all transcript
+  const clearTranscript = () => {
+    setTranscript('')
+    clearRecording()
+  }
+
+  // Clear all (both recording and transcript)
+  const clearAll = () => {
+    setTranscript('')
+    clearRecording()
+  }
+
+  // Copy transcript to clipboard
+  const copyToClipboard = async () => {
+    if (!transcript) return
+
+    try {
+      await navigator.clipboard.writeText(transcript)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch (err) {
+      console.error('Error copying to clipboard:', err)
+      setError('خطا در کپی کردن متن')
+    }
+  }
+
+  // Handle transcript text change
+  const handleTranscriptChange = (e) => {
+    setTranscript(e.target.value)
   }
 
   return (
@@ -300,70 +403,119 @@ function App() {
             </div>
           )}
           
-          {/* Show browser info for debugging */}
-          {browserInfo && (
-            <div className="browser-info" style={{ 
-              fontSize: '12px', 
-              color: '#666', 
-              marginBottom: '10px',
-              textAlign: 'center'
-            }}>
-              مرورگر: {browserInfo} | HTTPS: {isHTTPS() ? 'بله' : 'خیر'}
-            </div>
-          )}
-          
           <div className="transcript-section">
-            <div className="transcript-box">
+            {/* نمایش وضعیت پردازش */}
+            {isLoading && (
+              <div className="status-indicator">
+                <div className="status-item loading">
+                  <LoadingIcon className="status-icon loading-spin" />
+                  <span>در حال پردازش...</span>
+                </div>
+              </div>
+            )}
+            
+            <div className={`transcript-box ${isRecording ? 'recording' : ''}`}>
               <textarea
                 ref={textareaRef}
-                className="transcript-display"
-                value={editableText}
-                onChange={handleTextareaChange}
-                onSelect={handleTextareaSelect}
-                onClick={handleTextareaSelect}
-                placeholder="متن گفتار در اینجا نمایش داده می‌شود و می‌توانید آن را ویرایش کنید..."
+                className={`transcript-display ${isRecording ? 'recording' : ''}`}
+                value={transcript}
+                onChange={handleTranscriptChange}
+                placeholder={isRecording ? "در حال ضبط صدا..." : "متن گفتار در اینجا نمایش داده می‌شود و می‌توانید آن را ویرایش کنید..."}
                 readOnly={isRecording}
               />
             </div>
           </div>
 
-          <div className="controls">
-            <button 
-              className={`primary-button ${isRecording ? 'recording' : ''}`}
-              onClick={toggleRecording}
-              disabled={!isSupported}
-            >
-              {isRecording ? (
-                <>
-                  <StopIcon className="button-icon" />
-                  توقف ضبط
-                </>
-              ) : (
-                <>
-                  <MicrophoneIcon className="button-icon" />
-                  شروع ضبط
-                </>
-              )}
-            </button>
-            
-            <button 
-              className="secondary-button"
-              onClick={clearTranscript}
-              disabled={!editableText && !transcript}
-            >
-              <TrashIcon className="button-icon" />
-              پاک کردن
-            </button>
+          {/* Audio element for playback */}
+          <audio ref={audioRef} style={{ display: 'none' }} />
 
-            <button 
-              className={`copy-button ${copySuccess ? 'success' : ''}`}
-              onClick={handleCopy}
-              disabled={!editableText && !transcript}
-            >
-              <CopyIcon className="button-icon" />
-              {copySuccess ? 'کپی شد!' : 'کپی متن'}
-            </button>
+
+
+          <div className={`controls ${!hasRecording && !transcript ? 'center-mode' : ''}`}>
+            {/* Left side buttons - فقط وقتی چیزی برای نمایش داریم */}
+            {(hasRecording || transcript) && (
+              <div className="controls-left">
+                {/* Copy button - فقط وقتی متن موجود باشد */}
+                {transcript && (
+                  <button 
+                    className={`copy-button-left ${copySuccess ? 'success' : ''}`}
+                    onClick={copyToClipboard}
+                    disabled={isRecording}
+                  >
+                    {copySuccess ? (
+                      <CheckIcon className="button-icon" />
+                    ) : (
+                      <CopyIcon className="button-icon" />
+                    )}
+                  </button>
+                )}
+                
+                {/* Clear button */}
+                <button 
+                  className="clear-button-left"
+                  onClick={clearAll}
+                  disabled={!transcript && !hasRecording}
+                >
+                  <TrashIcon className="button-icon" />
+                </button>
+              </div>
+            )}
+
+            {/* Audio Player - وسط (فقط وقتی ضبط موجود باشه) */}
+            {hasRecording && !isRecording && (
+              <AudioPlayer
+                audioRef={audioRef}
+                isPlaying={isPlaying}
+                onTogglePlay={togglePlayback}
+                duration={audioDuration}
+                currentTime={currentTime}
+                fileSize={audioFileSize}
+              />
+            )}
+
+            {/* Right side buttons - سمت راست یا وسط */}
+            <div className="controls-right">
+              {/* Recording button */}
+              <button 
+                className={`icon-button record-button ${isRecording ? 'recording' : ''}`}
+                onClick={toggleRecording}
+                disabled={isLoading}
+              >
+                {isRecording ? (
+                  <StopIcon className="button-icon" />
+                ) : (
+                  <MicrophoneIcon className="button-icon" />
+                )}
+              </button>
+
+              {/* Send button */}
+              <button 
+                className="icon-button send-button"
+                onClick={sendAudio}
+                disabled={!hasRecording || isLoading || isRecording}
+              >
+                {isLoading ? (
+                  <LoadingIcon className="button-icon loading-spin" />
+                ) : (
+                  <SendIcon className="button-icon" />
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* انیمیشن ضبط در پایین صفحه */}
+          {isRecording && (
+            <div className="recording-indicator-bottom">
+              <div className="recording-animation-bottom">
+                <div className="wave-bar-bottom"></div>
+                <div className="wave-bar-bottom"></div>
+                <div className="wave-bar-bottom"></div>
+                <div className="wave-bar-bottom"></div>
+                <div className="wave-bar-bottom"></div>
+              </div>
+              <span className="recording-text">در حال ضبط...</span>
+            </div>
+          )}
         </main>
       </div>
     </div>

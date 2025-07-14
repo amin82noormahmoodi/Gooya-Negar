@@ -1,12 +1,135 @@
-# React + Vite
+# گویا نگار - فرانت‌اند
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+رابط کاربری برای سیستم تبدیل صدا به متن با استفاده از React و Vite.
 
-Currently, two official plugins are available:
+## ویژگی‌ها
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- ✅ ضبط صدای زنده از میکروفون
+- ✅ پخش صدای ضبط شده قبل از ارسال
+- ✅ ارسال فایل صوتی به بک‌اند برای تبدیل به متن
+- ✅ نمایش متن تبدیل شده در باکس قابل ویرایش
+- ✅ کپی متن به کلیپ‌بورد
+- ✅ پاک کردن ضبط یا متن
+- ✅ رابط کاربری واکنش‌گرا (Responsive)
+- ✅ طراحی مدرن با Glassmorphism
+- ✅ پشتیبانی کامل از زبان فارسی
 
-## Expanding the ESLint configuration
+## نیازمندی‌ها
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Node.js (نسخه 16 یا بالاتر)
+- npm یا yarn
+- مرورگر مدرن با پشتیبانی از MediaRecorder API
+- بک‌اند FastAPI در حال اجرا بر روی پورت 8000
+
+## نصب و راه‌اندازی
+
+### 1. نصب dependencies
+
+```bash
+npm install
+```
+
+### 2. اجرای سرور توسعه
+
+```bash
+npm run dev
+```
+
+برنامه بر روی `http://localhost:5173` اجرا می‌شود.
+
+### 3. اجرای بک‌اند
+
+اطمینان حاصل کنید که بک‌اند FastAPI بر روی `http://localhost:8000` در حال اجرا است.
+
+## نحوه استفاده
+
+### گام 1: ضبط صدا
+- روی دکمه "شروع ضبط" کلیک کنید
+- اجازه دسترسی به میکروفون را بدهید
+- صحبت کنید
+- روی "توقف ضبط" کلیک کنید
+
+### گام 2: بررسی ضبط (اختیاری)
+- پس از توقف ضبط، دکمه "پخش ضبط" ظاهر می‌شود
+- می‌توانید ضبط خود را گوش دهید
+
+### گام 3: ارسال برای تبدیل
+- روی دکمه "ارسال" کلیک کنید
+- منتظر بمانید تا فایل پردازش شود
+
+### گام 4: مشاهده و ویرایش متن
+- متن تبدیل شده در باکس نمایش داده می‌شود
+- می‌توانید متن را ویرایش کنید
+
+### گام 5: کپی یا پاک کردن
+- برای کپی متن روی "کپی متن" کلیک کنید
+- برای پاک کردن همه چیز روی "پاک کردن" کلیک کنید
+
+## ساختار پروژه
+
+```
+src/
+├── App.jsx          # کامپوننت اصلی
+├── App.css          # استایل‌های اصلی
+├── main.jsx         # نقطه ورود برنامه
+└── assets/          # فایل‌های استاتیک (فونت‌ها و تصاویر)
+
+public/
+└── sound-waves.png  # لوگو
+```
+
+## تنظیمات API
+
+آدرس پیش‌فرض بک‌اند در فایل `App.jsx`:
+
+```javascript
+const API_BASE_URL = 'http://localhost:8000'
+```
+
+برای تغییر آدرس بک‌اند، این متغیر را تغییر دهید.
+
+## پشتیبانی مرورگر
+
+- ✅ Chrome 47+
+- ✅ Firefox 29+
+- ✅ Safari 14+
+- ✅ Edge 79+
+
+**نکته:** برای استفاده از میکروفون، اتصال HTTPS ضروری است (به جز localhost).
+
+## Build برای Production
+
+```bash
+npm run build
+```
+
+فایل‌های نهایی در پوشه `dist` ساخته می‌شوند.
+
+## مشکلات رایج
+
+### دسترسی به میکروفون
+- اطمینان حاصل کنید که اجازه دسترسی به میکروفون داده‌اید
+- در صورت استفاده از HTTPS، گواهی SSL معتبر داشته باشید
+
+### اتصال به بک‌اند
+- بررسی کنید که بک‌اند در حال اجرا است
+- آدرس API را بررسی کنید
+- CORS را در بک‌اند فعال کنید
+
+### کیفیت تشخیص صوت
+- در محیط ساکت صحبت کنید
+- نزدیک میکروفون قرار بگیرید
+- واضح و آهسته صحبت کنید
+
+## توسعه‌دهندگان
+
+برای مشارکت در توسعه:
+
+1. Fork کنید
+2. Branch جدید بسازید
+3. تغییرات را commit کنید
+4. Pull request ارسال کنید
+
+## لایسنس
+
+این پروژه تحت لایسنس MIT منتشر شده است.
