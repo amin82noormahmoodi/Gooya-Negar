@@ -1,9 +1,6 @@
 {
-  "app": "gooya-negar",
-  "port": 80,
-  "build": {
-    "location": "iran"
-  },
-  
-  "disks": []
+  "react": {
+  "mirror": true,
+  "sourceMap": false
+  }
 }
