@@ -17,4 +17,4 @@ jobs:
           LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
         run: |
           npm i -g @liara/cli@7
-          liara deploy --app="gooya-negar" --api-token="$LIARA_TOKEN" --no-app-logs
+          liara deploy --app="gooya-negar" --api-token="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySUQiOiI2ODQzNTc3NGQyYzg1NWQxMjgzOTUxZTQiLCJ0eXBlIjoiYXV0aCIsImlhdCI6MTc1MjQ3NDg1OX0.2ZHGx_JI-Lorfifu6Iq0oY_Du3s3goBdEl9ZJof6WAk" --no-app-logs
