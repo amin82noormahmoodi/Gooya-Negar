@@ -64,6 +64,17 @@ const CopyIcon = ({ className }) => (
   </svg>
 )
 
+// Helper function to detect Safari iOS
+const isSafariIOS = () => {
+  const userAgent = navigator.userAgent.toLowerCase()
+  return /iphone|ipad|ipod/.test(userAgent) && /safari/.test(userAgent) && !/chrome|crios|fxios/.test(userAgent)
+}
+
+// Helper function to check if HTTPS is being used
+const isHTTPS = () => {
+  return window.location.protocol === 'https:' || window.location.hostname === 'localhost'
+}
+
 function App() {
   const [isRecording, setIsRecording] = useState(false)
   const [transcript, setTranscript] = useState('')
@@ -73,19 +84,41 @@ function App() {
   const [copySuccess, setCopySuccess] = useState(false)
   const [cursorPosition, setCursorPosition] = useState(0)
   const [cursorManuallyMoved, setCursorManuallyMoved] = useState(false)
+  const [browserInfo, setBrowserInfo] = useState('')
   const textareaRef = useRef(null)
 
   const recognitionRef = useRef(null)
 
   // Check browser support for Web Speech API
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const checkSupport = () => {
+      // Check if we have speech recognition support
+      const hasWebkitSpeechRecognition = 'webkitSpeechRecognition' in window
+      const hasSpeechRecognition = 'SpeechRecognition' in window
+      
+      if (!hasWebkitSpeechRecognition && !hasSpeechRecognition) {
+        setIsSupported(false)
+        setError('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند')
+        return
+      }
+
+      // Check HTTPS requirement for Safari iOS
+      if (isSafariIOS() && !isHTTPS()) {
+        setIsSupported(false)
+        setError('برای استفاده از تشخیص گفتار در Safari، نیاز به HTTPS دارید')
+        return
+      }
+
+      // Set browser info for debugging
+      const userAgent = navigator.userAgent
+      const isSafari = isSafariIOS()
+      setBrowserInfo(isSafari ? 'Safari iOS' : 'Other')
+
       setIsSupported(true)
       initializeSpeechRecognition()
-    } else {
-      setIsSupported(false)
-      setError('مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند')
     }
+
+    checkSupport()
   }, [])
 
   // Save cursor position when textarea changes
@@ -105,12 +138,20 @@ function App() {
   }
 
   const initializeSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const recognition = new SpeechRecognition()
+    // Use webkitSpeechRecognition for Safari compatibility
+    const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition
+    
+    if (!SpeechRecognition) {
+      setError('تشخیص گفتار در دسترس نیست')
+      return
+    }
 
-    // Configuration
-    recognition.continuous = true
-    recognition.interimResults = true
+    const recognition = new SpeechRecognition()
+    const isSafari = isSafariIOS()
+
+    // Configuration - adjusted for Safari iOS
+    recognition.continuous = !isSafari // Safari iOS has issues with continuous mode
+    recognition.interimResults = !isSafari // Safari iOS has issues with interim results
     recognition.lang = 'fa-IR' // Persian language
     recognition.maxAlternatives = 1
 
@@ -142,6 +183,12 @@ function App() {
         }
       }
 
+      // For Safari iOS, treat all results as final
+      if (isSafari) {
+        finalTranscriptTemp = interimTranscript + finalTranscriptTemp
+        interimTranscript = ''
+      }
+
       setTranscript(interimTranscript)
       
       if (finalTranscriptTemp) {
@@ -168,6 +215,19 @@ function App() {
           
           return newText
         })
+
+        // For Safari iOS, restart recognition after getting a result
+        if (isSafari && isRecording) {
+          setTimeout(() => {
+            if (recognitionRef.current && isRecording) {
+              try {
+                recognitionRef.current.start()
+              } catch (err) {
+                console.log('Recognition restart failed:', err)
+              }
+            }
+          }, 100)
+        }
       }
     }
 
@@ -183,13 +243,20 @@ function App() {
           setError('خطا در دسترسی به میکروفون')
           break
         case 'not-allowed':
-          setError('دسترسی به میکروفون رد شد')
+          setError('دسترسی به میکروفون رد شد. لطفاً دسترسی را مجاز کنید.')
           break
         case 'network':
           setError('خطا در اتصال به اینترنت')
           break
         case 'service-not-allowed':
-          setError('سرویس تشخیص گفتار در دسترس نیست')
+          if (isSafariIOS() && !isHTTPS()) {
+            setError('برای استفاده از تشخیص گفتار در Safari، نیاز به HTTPS دارید')
+          } else {
+            setError('سرویس تشخیص گفتار در دسترس نیست. لطفاً دسترسی میکروفون را بررسی کنید.')
+          }
+          break
+        case 'aborted':
+          // Don't show error for aborted recognition
           break
         default:
           setError(`خطا: ${event.error}`)
@@ -211,13 +278,31 @@ function App() {
       return
     }
 
+    // Check HTTPS requirement again
+    if (isSafariIOS() && !isHTTPS()) {
+      setError('برای استفاده از تشخیص گفتار در Safari، نیاز به HTTPS دارید')
+      return
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.start()
         setError('')
       } catch (err) {
         console.error('خطا در شروع ضبط:', err)
-        setError('خطا در شروع ضبط')
+        if (err.name === 'InvalidStateError') {
+          // Recognition is already running, stop it first
+          recognitionRef.current.stop()
+          setTimeout(() => {
+            try {
+              recognitionRef.current.start()
+            } catch (retryErr) {
+              setError('خطا در شروع ضبط')
+            }
+          }, 100)
+        } else {
+          setError('خطا در شروع ضبط')
+        }
       }
     }
   }
@@ -270,6 +355,18 @@ function App() {
             <div className="error-message">
               <XIcon className="error-icon" />
               <span>{error}</span>
+            </div>
+          )}
+          
+          {/* Show browser info for debugging */}
+          {browserInfo && (
+            <div className="browser-info" style={{ 
+              fontSize: '12px', 
+              color: '#666', 
+              marginBottom: '10px',
+              textAlign: 'center'
+            }}>
+              مرورگر: {browserInfo} | HTTPS: {isHTTPS() ? 'بله' : 'خیر'}
             </div>
           )}
           
