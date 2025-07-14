@@ -173,10 +173,12 @@ function App() {
     recognition.onresult = (event) => {
       let interimTranscript = ''
       let finalTranscriptTemp = ''
-
+      // console.log(event.results)
+      
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
+        // console.log(event)
+        if (event.results[i].isFinal && event.results[i-1].confidence != event.results[i].confidence) {
           finalTranscriptTemp += transcript
         } else {
           interimTranscript += transcript
@@ -195,7 +197,8 @@ function App() {
         setEditableText(prevText => {
           // Get current cursor position from textarea
           const currentPosition = cursorManuallyMoved ? cursorPosition : prevText.length
-          
+          console.log("#### GIIIIIIIIIIII ####")
+
           // Insert new text at cursor position
           const beforeCursor = prevText.slice(0, currentPosition)
           const afterCursor = prevText.slice(currentPosition)
