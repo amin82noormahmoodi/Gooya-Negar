@@ -178,7 +178,7 @@ function App() {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript
         // console.log(event)
-        if (event.results[i].isFinal && event.results[i-1].confidence != event.results[i].confidence) {
+        if (event.results[i].isFinal) {
           finalTranscriptTemp += transcript
         } else {
           interimTranscript += transcript
@@ -198,6 +198,9 @@ function App() {
           // Get current cursor position from textarea
           const currentPosition = cursorManuallyMoved ? cursorPosition : prevText.length
           console.log("#### GIIIIIIIIIIII ####")
+          console.log(prevText)
+          console.log(currentPosition)
+          console.log(finalTranscriptTemp)
 
           // Insert new text at cursor position
           const beforeCursor = prevText.slice(0, currentPosition)
