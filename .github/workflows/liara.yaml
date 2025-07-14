@@ -16,5 +16,5 @@ jobs:
         env:
           LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
         run: |
-          npm i -g @liara/cli@7
-          liara deploy --app="amirgi" --api-token="$LIARA_TOKEN" --no-app-logs
+          npm i -g @liara/cli@5
+          liara deploy --app="gooya-negar" --api-token="$LIARA_TOKEN" --no-app-logs
